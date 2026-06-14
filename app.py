@@ -6,13 +6,13 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # =========================
-# LOAD MODEL + VECTORIZER
+# LOAD MODEL
 # =========================
 model = joblib.load("career_model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
 
 # =========================
-# OPENAI CLIENT (SAFE)
+# OPENAI CLIENT (SAFE - ENV VARIABLE)
 # =========================
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -39,41 +39,37 @@ Interests: <input name="interests"><br><br>
 """
 
 # =========================
-# CHATGPT-STYLE EXPLANATION
+# AI EXPLANATION FUNCTION
 # =========================
 def get_explanation(career):
     try:
+        api_key = os.getenv("OPENAI_API_KEY")
+
+        if not api_key:
+            return "ERROR: OpenAI API key not found in environment variables."
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "You are an expert AI career advisor like ChatGPT. "
-                        "You explain careers in a clear, structured, and motivational way. "
-                        "Always structure your response into 4 sections:\n"
-                        "1. What the career is\n"
-                        "2. Key skills needed\n"
-                        "3. Why this career fits the student\n"
-                        "4. Career growth opportunities\n"
-                        "Keep it simple, human, and student-friendly."
+                        "You are an expert career advisor AI like ChatGPT. "
+                        "Explain careers in a clear, structured, and motivating way. "
+                        "Always include: what it is, skills needed, why it fits, and career growth."
                     )
                 },
                 {
                     "role": "user",
-                    "content": f"""
-The predicted career is: {career}
-
-Give a helpful explanation that sounds like a real career counselor.
-"""
+                    "content": f"Explain this career in a student-friendly way: {career}"
                 }
             ]
         )
 
         return response.choices[0].message.content
 
-    except Exception:
-        return "AI explanation unavailable. Please check API connection."
+    except Exception as e:
+        return f"AI ERROR: {str(e)}"
 
 # =========================
 # ROUTE
@@ -103,7 +99,7 @@ def home():
     return render_template_string(html, result=result, confidence=confidence, explanation=explanation)
 
 # =========================
-# RUN APP (RENDER READY)
+# RUN APP
 # =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
