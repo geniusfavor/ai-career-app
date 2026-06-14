@@ -1,5 +1,7 @@
 from flask import Flask, request, render_template_string
 import joblib
+import os
+from openai import OpenAI
 
 app = Flask(__name__)
 
@@ -7,17 +9,8 @@ app = Flask(__name__)
 model = joblib.load("career_model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
 
-# Simple career explanations (AI-style layer)
-career_info = {
-    "Data Scientist": "You analyze data, find patterns, and help companies make decisions using machine learning and statistics.",
-    "Software Engineer": "You design and build software systems and applications used by millions of users.",
-    "UX Designer": "You improve how apps and websites feel and make them easy and enjoyable to use.",
-    "Digital Marketer": "You promote products online using social media, ads, and content strategies.",
-    "Cybersecurity Analyst": "You protect systems and networks from cyber attacks and security threats."
-}
-
-def get_explanation(career):
-    return career_info.get(career, "This career involves specialized skills and industry expertise.")
+# OpenAI client (SAFE: uses environment variable)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # HTML UI
 html = """
@@ -33,9 +26,29 @@ Interests: <input name="interests"><br><br>
 {% if result %}
 <h3>Result: {{ result }}</h3>
 <p><b>Confidence:</b> {{ confidence }}%</p>
-<p><b>AI Explanation:</b> {{ explanation }}</p>
+<p><b>AI Explanation:</b></p>
+<p>{{ explanation }}</p>
 {% endif %}
 """
+
+def get_explanation(career):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a professional career advisor AI. Explain careers simply, clearly, and motivationally."
+                },
+                {
+                    "role": "user",
+                    "content": f"Explain this career path in simple terms: {career}"
+                }
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception:
+        return "This career involves specialized skills, growth opportunities, and industry demand."
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -51,20 +64,15 @@ def home():
         user_input = skills + " " + interests + " " + edu
         vector = vectorizer.transform([user_input])
 
-        # Predict career
         prediction = model.predict(vector)[0]
-
-        # Fake but realistic confidence (ML limitation workaround)
         probs = model.predict_proba(vector)
+
         confidence = round(max(probs[0]) * 100, 2)
-
         explanation = get_explanation(prediction)
-
         result = prediction
 
     return render_template_string(html, result=result, confidence=confidence, explanation=explanation)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-
     
